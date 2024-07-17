@@ -82,7 +82,6 @@ class MainWindow(QWidget):
       generations = int(self.input_generaciones.text())
       individual_mutation = float(self.input_mutacion_individual.text())
       mutation_per_gen = float(self.input_mutacion_por_gen.text())
-      max_cost = float(self.input_max_cost.text())
       min_resistance = float(self.input_min_resistance.text())
       min_durability = float(self.input_min_durability.text())
 
