@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Resultados</title>
+</head>
+<body>
+    <h1>Mejores Mezclas</h1>
+    {% for mezcla in mezclas %}
+        <h2>Mejor mezcla</h2>
+        <p>{{ mezcla }}</p>
+    {% endfor %}
+    <a href="/">Volver</a>
+</body>
+</html>

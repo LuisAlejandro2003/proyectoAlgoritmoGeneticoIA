@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 df_materiales = pd.read_csv('materiales.csv')
 
 # Función para imprimir las propiedades de una mezcla en la interfaz
-def imprimir_mezcla(mezcla, nombre):
+def imprimir_mezcla(mezcla, nombre, requisitos):
     if mezcla is None:
-        return f"{nombre} no se encontró."
+        return f"<span style='color:red;'>{nombre} no se encontró.</span>"
 
     materiales_utilizados = df_materiales.loc[mezcla > 0]
     porcentajes = mezcla[mezcla > 0] * 100  # Convertir a porcentajes
@@ -18,14 +18,22 @@ def imprimir_mezcla(mezcla, nombre):
     costo_total = np.sum(mezcla * df_materiales['Costo (USD/kg)'])
     resistencia_corrosion_total = np.sum(mezcla * df_materiales['Resistencia a la Corrosión (%)'])
 
-    output = f"\n{nombre}:\n"
+    # Comprobar si cumple con los requisitos
+    if (resistencia_total >= requisitos['resistencia_minima'] and
+        durabilidad_total >= requisitos['durabilidad_deseada'] and
+        resistencia_corrosion_total >= requisitos['resistencia_corrosion_minima']):
+        color = 'green'
+    else:
+        color = 'red'
+
+    output = f"<span style='color:{color};'>{nombre}:</span><br>"
     for material, porcentaje in zip(materiales_utilizados['Material'], porcentajes):
-        output += f"{material}: {porcentaje:.2f}%\n"
-    output += "\nPropiedades de la mezcla:\n"
-    output += f"Resistencia total: {resistencia_total:.2f} MPa\n"
-    output += f"Durabilidad total: {durabilidad_total:.2f} años\n"
-    output += f"Costo total: {costo_total:.2f} USD/kg\n"
-    output += f"Resistencia a la corrosión total: {resistencia_corrosion_total:.2f} %\n"
+        output += f"{material}: {porcentaje:.2f}%<br>"
+    output += "<br>Propiedades de la mezcla:<br>"
+    output += f"Resistencia total: {resistencia_total:.2f} MPa<br>"
+    output += f"Durabilidad total: {durabilidad_total:.2f} años<br>"
+    output += f"Costo total: {costo_total:.2f} USD/kg<br>"
+    output += f"Resistencia a la corrosión total: {resistencia_corrosion_total:.2f} %<br>"
     
     return output
 
@@ -237,9 +245,9 @@ class MainWindow(QWidget):
         global mejores_mezclas, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion
         mejores_mezclas, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion = algoritmo_genetico(generaciones, inicial, requisitos, final, tasa_mutacion_individual, tasa_mutacion_gen)
 
-        self.output.append(imprimir_mezcla(mejores_mezclas[0], 'Mejor mezcla 1'))
-        self.output.append(imprimir_mezcla(mejores_mezclas[1], 'Mejor mezcla 2'))
-        self.output.append(imprimir_mezcla(mejores_mezclas[2], 'Mejor mezcla 3'))
+        self.output.append(imprimir_mezcla(mejores_mezclas[0], 'Mejor mezcla 1', requisitos))
+        self.output.append(imprimir_mezcla(mejores_mezclas[1], 'Mejor mezcla 2',  requisitos))
+        self.output.append(imprimir_mezcla(mejores_mezclas[2], 'Mejor mezcla 3', requisitos))
 
     def plot_evolution(self):
         generaciones = list(range(len(historia_resistencias[0])))
