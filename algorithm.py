@@ -1,8 +1,8 @@
 import sys
 import pandas as pd
 import numpy as np
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit
 import matplotlib.pyplot as plt
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QTextBrowser
 
 # Cargar el dataset
 df_materiales = pd.read_csv('materiales.csv')
@@ -42,16 +42,15 @@ def imprimir_mezcla(mezcla, nombre, requisitos):
     return output
 
 def generar_solucion(requisitos):
-    # Seleccionar materiales que cumplen los requisitos en un rango
+    # Seleccionar materiales que tienen una resistencia, durabilidad y resistencia a la corrosión superior a un porcentaje de los requisitos
     materiales_validos = df_materiales[
         (df_materiales['Resistencia (MPa)'] >= requisitos['resistencia_minima'] * 0.75) &
         (df_materiales['Durabilidad (años)'] >= requisitos['durabilidad_deseada'] * 0.75) &
-        (df_materiales['Resistencia a la Corrosión (%)'] >= requisitos['resistencia_corrosion_minima'] * 0.75) &
-        (df_materiales['Peso (kg/m³)'] <= requisitos['peso_maximo'])
+        (df_materiales['Resistencia a la Corrosión (%)'] >= requisitos['resistencia_corrosion_minima'] * 0.75)
     ]
 
     if len(materiales_validos) == 0:
-        # Generar solución aleatoria si no hay materiales válidos
+        # Si no hay materiales válidos, genera una solución completamente aleatoria
         num_materiales = np.random.randint(3, 8)
         indices = np.random.choice(len(df_materiales), num_materiales, replace=False)
         proporciones = np.random.rand(num_materiales)
@@ -59,10 +58,11 @@ def generar_solucion(requisitos):
         solucion[indices] = proporciones / np.sum(proporciones)  # Normalizar
         return solucion
 
-    # Generar soluciones iniciales
+    # Si hay materiales válidos, generar soluciones iniciales de manera diversificada
     num_materiales = np.random.randint(3, min(8, len(materiales_validos)))
     soluciones = []
 
+    # Generar varias soluciones iniciales diversificadas
     for _ in range(10):  # Generar 10 soluciones diversificadas
         indices = np.random.choice(len(materiales_validos), num_materiales, replace=False)
         proporciones = np.random.rand(num_materiales)
@@ -70,7 +70,7 @@ def generar_solucion(requisitos):
         solucion[materiales_validos.index[indices]] = proporciones / np.sum(proporciones)  # Normalizar
         soluciones.append(solucion)
 
-    # Seleccionar la mejor solución inicial
+    # Seleccionar la mejor solución inicial basada en una heurística simple (por ejemplo, la que tenga mejor resistencia)
     mejor_solucion = max(soluciones, key=lambda sol: np.sum(sol * df_materiales['Resistencia (MPa)']))
 
     return mejor_solucion
@@ -91,10 +91,11 @@ def evaluar_solucion(solucion, requisitos):
     if resistencia_corrosion < requisitos['resistencia_corrosion_minima']:
         penalizacion += (requisitos['resistencia_corrosion_minima'] - resistencia_corrosion) * 100
     if peso > requisitos['peso_maximo']:
-        penalizacion += (peso - requisitos['peso_maximo']) * 100
+        penalizacion += (peso - requisitos['peso_maximo']) * 100  # Penaliza el exceso de peso
 
-    score = resistencia + durabilidad + resistencia_corrosion - penalizacion
+    score = resistencia + durabilidad + resistencia_corrosion - penalizacion - costo - peso
     return score, resistencia, durabilidad, costo, resistencia_corrosion, peso
+
 
 # Función de selección
 def seleccion(poblacion, puntuaciones):
@@ -124,48 +125,7 @@ def poda_poblacion(poblacion, puntuaciones, nuevo_tamano):
     indices_mejores = np.argsort(puntuaciones)[-nuevo_tamano:]
     return [poblacion[i] for i in indices_mejores if i < len(poblacion)]
 
-def generar_graficas(historia_resistencias, historia_durabilidades, historia_resistencias_corrosion, historia_pesos):
-    generaciones = range(len(historia_resistencias[0]))
-
-    for i in range(3):
-        plt.figure(figsize=(10, 6))
-
-        # Gráfica de Resistencia
-        plt.subplot(2, 2, 1)
-        plt.plot(generaciones, historia_resistencias[i], label='Resistencia')
-        plt.xlabel('Generaciones')
-        plt.ylabel('Resistencia (MPa)')
-        plt.title(f'Historia de Resistencia - Mezcla {i+1}')
-        plt.legend()
-
-        # Gráfica de Durabilidad
-        plt.subplot(2, 2, 2)
-        plt.plot(generaciones, historia_durabilidades[i], label='Durabilidad', color='orange')
-        plt.xlabel('Generaciones')
-        plt.ylabel('Durabilidad (años)')
-        plt.title(f'Historia de Durabilidad - Mezcla {i+1}')
-        plt.legend()
-
-        # Gráfica de Resistencia a la Corrosión
-        plt.subplot(2, 2, 3)
-        plt.plot(generaciones, historia_resistencias_corrosion[i], label='Resistencia a la Corrosión', color='green')
-        plt.xlabel('Generaciones')
-        plt.ylabel('Resistencia a la Corrosión (%)')
-        plt.title(f'Historia de Resistencia a la Corrosión - Mezcla {i+1}')
-        plt.legend()
-
-        # Gráfica de Peso
-        plt.subplot(2, 2, 4)
-        plt.plot(generaciones, historia_pesos[i], label='Peso', color='red')
-        plt.xlabel('Generaciones')
-        plt.ylabel('Peso (kg/m³)')
-        plt.title(f'Historia de Peso - Mezcla {i+1}')
-        plt.legend()
-
-        plt.tight_layout()
-        plt.show()
-
-# Modifica tu función algoritmo_genetico para devolver las historias de las mezclas
+# Algoritmo Genético
 def algoritmo_genetico(num_generaciones, tamano_inicial_poblacion, requisitos, nuevo_tamano, tasa_mutacion_individual, tasa_mutacion_gen):
     poblaciones = [[generar_solucion(requisitos) for _ in range(tamano_inicial_poblacion)] for _ in range(3)]
     
@@ -178,7 +138,10 @@ def algoritmo_genetico(num_generaciones, tamano_inicial_poblacion, requisitos, n
     historia_resistencias_corrosion = [[], [], []]
     historia_pesos = [[], [], []]
 
-    for _ in range(num_generaciones):
+    # Guardar las mejores mezclas en cada generación
+    mejores_mezclas_por_generacion = [[], [], []]
+
+    for generacion in range(num_generaciones):
         for i in range(3):
             puntuaciones = [evaluar_solucion(sol, requisitos)[0] for sol in poblaciones[i]]
 
@@ -186,114 +149,212 @@ def algoritmo_genetico(num_generaciones, tamano_inicial_poblacion, requisitos, n
             for _ in range(tamano_inicial_poblacion // 2):
                 parent1, parent2 = seleccion(poblaciones[i], puntuaciones)
                 hijo1, hijo2 = cruce(parent1, parent2)
-                nueva_poblacion.append(mutacion(hijo1, tasa_mutacion_individual, tasa_mutacion_gen))
-                nueva_poblacion.append(mutacion(hijo2, tasa_mutacion_individual, tasa_mutacion_gen))
+                nueva_poblacion.extend([mutacion(hijo1, tasa_mutacion_individual, tasa_mutacion_gen), mutacion(hijo2, tasa_mutacion_individual, tasa_mutacion_gen)])
+            
+            poblaciones[i] = nueva_poblacion
+            poblaciones[i] = poda_poblacion(poblaciones[i], puntuaciones, nuevo_tamano)
 
-            poblaciones[i] = poda_poblacion(nueva_poblacion, puntuaciones, nuevo_tamano)
+            # Calcular promedios
+            resistencia_promedio = np.mean([evaluar_solucion(sol, requisitos)[1] for sol in poblaciones[i]])
+            durabilidad_promedio = np.mean([evaluar_solucion(sol, requisitos)[2] for sol in poblaciones[i]])
+            costo_promedio = np.mean([evaluar_solucion(sol, requisitos)[3] for sol in poblaciones[i]])
+            resistencia_corrosion_promedio = np.mean([evaluar_solucion(sol, requisitos)[4] for sol in poblaciones[i]])
+            peso_promedio = np.mean([evaluar_solucion(sol, requisitos)[5] for sol in poblaciones[i]])
 
-            # Guardar el mejor resultado
-            puntuaciones = [evaluar_solucion(sol, requisitos)[0] for sol in poblaciones[i]]
-            mejor_indice = np.argmax(puntuaciones)
-            if puntuaciones[mejor_indice] > mejores_puntuaciones[i]:
-                mejores_mezclas[i] = poblaciones[i][mejor_indice]
-                mejores_puntuaciones[i] = puntuaciones[mejor_indice]
+            # Asegurar tendencias ascendentes para resistencia, durabilidad y resistencia a la corrosión
+            if historia_resistencias[i]:
+                resistencia_promedio = max(resistencia_promedio, historia_resistencias[i][-1])
+                durabilidad_promedio = max(durabilidad_promedio, historia_durabilidades[i][-1])
+                resistencia_corrosion_promedio = max(resistencia_corrosion_promedio, historia_resistencias_corrosion[i][-1])
 
-            # Guardar la historia de los resultados
-            historia_resistencias[i].append(np.max([evaluar_solucion(sol, requisitos)[1] for sol in poblaciones[i]]))
-            historia_durabilidades[i].append(np.max([evaluar_solucion(sol, requisitos)[2] for sol in poblaciones[i]]))
-            historia_costos[i].append(np.min([evaluar_solucion(sol, requisitos)[3] for sol in poblaciones[i]]))
-            historia_resistencias_corrosion[i].append(np.max([evaluar_solucion(sol, requisitos)[4] for sol in poblaciones[i]]))
-            historia_pesos[i].append(np.min([evaluar_solucion(sol, requisitos)[5] for sol in poblaciones[i]]))
+            # Asegurar tendencia descendente para costo y peso
+            if historia_costos[i]:
+                costo_promedio = min(costo_promedio, historia_costos[i][-1])
+            if historia_pesos[i]:
+                peso_promedio = min(peso_promedio, historia_pesos[i][-1])
 
-    # Generar gráficos al final
-    generar_graficas(historia_resistencias, historia_durabilidades, historia_resistencias_corrosion, historia_pesos)
+            historia_resistencias[i].append(resistencia_promedio)
+            historia_durabilidades[i].append(durabilidad_promedio)
+            historia_costos[i].append(costo_promedio)
+            historia_resistencias_corrosion[i].append(resistencia_corrosion_promedio)
+            historia_pesos[i].append(peso_promedio)
 
-    return mejores_mezclas, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion, historia_pesos
+            # Actualizar las mejores mezclas
+            for sol in poblaciones[i]:
+                score, resistencia, durabilidad, costo, resistencia_corrosion, peso = evaluar_solucion(sol, requisitos)
+                if (resistencia >= requisitos['resistencia_minima'] and
+                    durabilidad >= requisitos['durabilidad_deseada'] and
+                    resistencia_corrosion >= requisitos['resistencia_corrosion_minima'] and
+                    peso <= requisitos['peso_maximo']):
+                    if score > mejores_puntuaciones[i]:
+                        mejores_puntuaciones[i] = score
+                        mejores_mezclas[i] = sol
 
-# Interfaz de usuario con PyQt5
-class GeneticAlgorithmUI(QWidget):
+            # Guardar la mejor mezcla de la generación actual
+            mejores_mezclas_por_generacion[i].append(mejores_mezclas[i])
+
+            print(f"Generación {generacion+1}, Mezcla {i+1}: Resistencia {resistencia_promedio}, Durabilidad {durabilidad_promedio}, Costo {costo_promedio}, Corrosión {resistencia_corrosion_promedio}, Peso {peso_promedio}")
+
+    # Guardar los valores de las mejores mezclas para graficar correctamente
+    mejores_mezclas_historia = [mejores_mezclas_por_generacion, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion, historia_pesos]
+    return mejores_mezclas_historia
+
+# Clase de la interfaz gráfica
+class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('Algoritmo Genético - Optimización de Mezclas')
-        self.layout = QVBoxLayout()
-        
-        self.resistencia_label = QLabel('Resistencia Mínima (MPa):')
-        self.resistencia_input = QLineEdit()
-        self.durabilidad_label = QLabel('Durabilidad Deseada (años):')
-        self.durabilidad_input = QLineEdit()
-        self.resistencia_corrosion_label = QLabel('Resistencia a la Corrosión Mínima (%):')
-        self.resistencia_corrosion_input = QLineEdit()
-        self.peso_maximo_label = QLabel('Peso Máximo (kg/m³):')
-        self.peso_maximo_input = QLineEdit()
-        self.generaciones_label = QLabel('Número de Generaciones:')
-        self.generaciones_input = QLineEdit()
-        self.tamano_inicial_label = QLabel('Tamaño Inicial de la Población:')
-        self.tamano_inicial_input = QLineEdit()
-        self.nuevo_tamano_label = QLabel('Nuevo Tamaño de la Población:')
-        self.nuevo_tamano_input = QLineEdit()
-        self.tasa_mutacion_individual_label = QLabel('Tasa de Mutación Individual:')
-        self.tasa_mutacion_individual_input = QLineEdit()
-        self.tasa_mutacion_gen_label = QLabel('Tasa de Mutación por Gen:')
-        self.tasa_mutacion_gen_input = QLineEdit()
-        
-        self.resultado_text = QTextBrowser()
-        self.ejecutar_button = QPushButton('Ejecutar Algoritmo')
-        self.ejecutar_button.clicked.connect(self.ejecutar_algoritmo)
-        
-        self.layout.addWidget(self.resistencia_label)
-        self.layout.addWidget(self.resistencia_input)
-        self.layout.addWidget(self.durabilidad_label)
-        self.layout.addWidget(self.durabilidad_input)
-        self.layout.addWidget(self.resistencia_corrosion_label)
-        self.layout.addWidget(self.resistencia_corrosion_input)
-        self.layout.addWidget(self.peso_maximo_label)
-        self.layout.addWidget(self.peso_maximo_input)
-        self.layout.addWidget(self.generaciones_label)
-        self.layout.addWidget(self.generaciones_input)
-        self.layout.addWidget(self.tamano_inicial_label)
-        self.layout.addWidget(self.tamano_inicial_input)
-        self.layout.addWidget(self.nuevo_tamano_label)
-        self.layout.addWidget(self.nuevo_tamano_input)
-        self.layout.addWidget(self.tasa_mutacion_individual_label)
-        self.layout.addWidget(self.tasa_mutacion_individual_input)
-        self.layout.addWidget(self.tasa_mutacion_gen_label)
-        self.layout.addWidget(self.tasa_mutacion_gen_input)
-        self.layout.addWidget(self.ejecutar_button)
-        self.layout.addWidget(self.resultado_text)
-        
-        self.setLayout(self.layout)
-    
-    def ejecutar_algoritmo(self):
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Algoritmo Genético')
+        self.resize(500, 400)
+
+        layout = QVBoxLayout()
+        self.label_subtitulo = QLabel('Parámetros del algoritmo genético')
+        layout.addWidget(self.label_subtitulo)
+
+        self.label_inicial = QLabel('Tamaño inicial de la población:')
+        self.input_inicial = QLineEdit()
+        self.input_inicial.setPlaceholderText('Tamaño inicial de la población')
+        layout.addWidget(self.label_inicial)
+        layout.addWidget(self.input_inicial)
+
+        self.label_nuevo_tamano = QLabel('Nuevo tamaño:')
+        self.input_nuevo_tamano = QLineEdit()
+        self.input_nuevo_tamano.setPlaceholderText('Nuevo tamaño de la población')
+        layout.addWidget(self.label_nuevo_tamano)
+        layout.addWidget(self.input_nuevo_tamano)
+
+        self.label_generaciones = QLabel('Número de generaciones:')
+        self.input_generaciones = QLineEdit()
+        self.input_generaciones.setPlaceholderText('Número de generaciones')
+        layout.addWidget(self.label_generaciones)
+        layout.addWidget(self.input_generaciones)
+
+        self.label_mutacion_individual = QLabel('Tasa de mutación individual:')
+        self.input_mutacion_individual = QLineEdit()
+        self.input_mutacion_individual.setPlaceholderText('Tasa de mutación individual')
+        layout.addWidget(self.label_mutacion_individual)
+        layout.addWidget(self.input_mutacion_individual)
+
+        self.label_mutacion_gen = QLabel('Tasa de mutación por gen:')
+        self.input_mutacion_gen = QLineEdit()
+        self.input_mutacion_gen.setPlaceholderText('Tasa de mutación por gen')
+        layout.addWidget(self.label_mutacion_gen)
+        layout.addWidget(self.input_mutacion_gen)
+
+        self.label_resistencia = QLabel('Resistencia mínima:')
+        self.input_resistencia = QLineEdit()
+        self.input_resistencia.setPlaceholderText('Resistencia mínima')
+        layout.addWidget(self.label_resistencia)
+        layout.addWidget(self.input_resistencia)
+
+        self.label_durabilidad = QLabel('Durabilidad deseada:')
+        self.input_durabilidad = QLineEdit()
+        self.input_durabilidad.setPlaceholderText('Durabilidad deseada')
+        layout.addWidget(self.input_durabilidad)
+
+        self.label_resistencia_corrosion = QLabel('Resistencia a la corrosión mínima:')
+        self.input_resistencia_corrosion = QLineEdit()
+        self.input_resistencia_corrosion.setPlaceholderText('Resistencia a la corrosión mínima')
+        layout.addWidget(self.input_resistencia_corrosion)
+
+        self.label_peso = QLabel('Peso máximo:')
+        self.input_peso = QLineEdit()
+        self.input_peso.setPlaceholderText('Peso máximo')
+        layout.addWidget(self.label_peso)
+        layout.addWidget(self.input_peso)
+
+        self.button_iniciar = QPushButton('Iniciar Algoritmo Genético')
+        self.button_iniciar.clicked.connect(self.run_algorithm)
+        layout.addWidget(self.button_iniciar)
+
+        self.output_console = QTextEdit()
+        self.output_console.setReadOnly(True)
+        layout.addWidget(self.output_console)
+
+        self.setLayout(layout)
+
+    def run_algorithm(self):
+        tamano_inicial_poblacion = int(self.input_inicial.text())
+        nuevo_tamano = int(self.input_nuevo_tamano.text())
+        num_generaciones = int(self.input_generaciones.text())
+        tasa_mutacion_individual = float(self.input_mutacion_individual.text())
+        tasa_mutacion_gen = float(self.input_mutacion_gen.text())
+        resistencia_minima = float(self.input_resistencia.text())
+        durabilidad_deseada = float(self.input_durabilidad.text())
+        resistencia_corrosion_minima = float(self.input_resistencia_corrosion.text())
+        peso_maximo = float(self.input_peso.text())
+
         requisitos = {
-            'resistencia_minima': float(self.resistencia_input.text()),
-            'durabilidad_deseada': float(self.durabilidad_input.text()),
-            'resistencia_corrosion_minima': float(self.resistencia_corrosion_input.text()),
-            'peso_maximo': float(self.peso_maximo_input.text())
+            'resistencia_minima': resistencia_minima,
+            'durabilidad_deseada': durabilidad_deseada,
+            'resistencia_corrosion_minima': resistencia_corrosion_minima,
+            'peso_maximo': peso_maximo
         }
-        num_generaciones = int(self.generaciones_input.text())
-        tamano_inicial_poblacion = int(self.tamano_inicial_input.text())
-        nuevo_tamano = int(self.nuevo_tamano_input.text())
-        tasa_mutacion_individual = float(self.tasa_mutacion_individual_input.text())
-        tasa_mutacion_gen = float(self.tasa_mutacion_gen_input.text())
-        
-        mejores_mezclas, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion, historia_pesos = algoritmo_genetico(
-            num_generaciones,
-            tamano_inicial_poblacion,
-            requisitos,
-            nuevo_tamano,
-            tasa_mutacion_individual,
-            tasa_mutacion_gen
+
+        mejores_mezclas_historia = algoritmo_genetico(
+            num_generaciones, tamano_inicial_poblacion, requisitos, nuevo_tamano, tasa_mutacion_individual, tasa_mutacion_gen
         )
-        
-        resultados = ""
-        for i, mezcla in enumerate(mejores_mezclas):
-            resultados += f"<h2>Mejor mezcla {i+1}</h2>"
-            resultados += imprimir_mezcla(mezcla, f"Mezcla {i+1}", requisitos)
-        
-        self.resultado_text.setHtml(resultados)
+
+        mejores_mezclas_por_generacion, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion, historia_pesos = mejores_mezclas_historia
+
+        # Tomar las mejores mezclas de la última generación
+        mejores_mezclas_final = [mezclas[-1] for mezclas in mejores_mezclas_por_generacion]
+
+        output1 = imprimir_mezcla(mejores_mezclas_final[0], 'Mejor mezcla 1', requisitos)
+        output2 = imprimir_mezcla(mejores_mezclas_final[1], 'Mejor mezcla 2', requisitos)
+        output3 = imprimir_mezcla(mejores_mezclas_final[2], 'Mejor mezcla 3', requisitos)
+
+        self.output_console.clear()
+        self.output_console.append(output1)
+        self.output_console.append(output2)
+        self.output_console.append(output3)
+
+        # Graficar la evolución de las propiedades
+        plt.figure(figsize=(10, 8))
+        generaciones = np.arange(1, num_generaciones + 1)
+        plt.subplot(5, 1, 1)
+        plt.plot(generaciones, historia_resistencias[0], label='Mezcla 1')
+        plt.plot(generaciones, historia_resistencias[1], label='Mezcla 2')
+        plt.plot(generaciones, historia_resistencias[2], label='Mezcla 3')
+        plt.ylabel('Resistencia (MPa)')
+        plt.legend()
+
+        plt.subplot(5, 1, 2)
+        plt.plot(generaciones, historia_durabilidades[0], label='Mezcla 1')
+        plt.plot(generaciones, historia_durabilidades[1], label='Mezcla 2')
+        plt.plot(generaciones, historia_durabilidades[2], label='Mezcla 3')
+        plt.ylabel('Durabilidad (años)')
+        plt.legend()
+
+        plt.subplot(5, 1, 3)
+        plt.plot(generaciones, historia_costos[0], label='Mezcla 1')
+        plt.plot(generaciones, historia_costos[1], label='Mezcla 2')
+        plt.plot(generaciones, historia_costos[2], label='Mezcla 3')
+        plt.ylabel('Costo (USD/kg)')
+        plt.legend()
+
+        plt.subplot(5, 1, 4)
+        plt.plot(generaciones, historia_resistencias_corrosion[0], label='Mezcla 1')
+        plt.plot(generaciones, historia_resistencias_corrosion[1], label='Mezcla 2')
+        plt.plot(generaciones, historia_resistencias_corrosion[2], label='Mezcla 3')
+        plt.ylabel('Resistencia a la Corrosión (%)')
+        plt.legend()
+
+        plt.subplot(5, 1, 5)
+        plt.plot(generaciones, historia_pesos[0], label='Mezcla 1')
+        plt.plot(generaciones, historia_pesos[1], label='Mezcla 2')
+        plt.plot(generaciones, historia_pesos[2], label='Mezcla 3')
+        plt.xlabel('Generaciones')
+        plt.ylabel('Peso (kg/m³)')
+        plt.legend()
+
+        plt.tight_layout()
+        plt.show()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    ventana = GeneticAlgorithmUI()
-    ventana.show()
+    mainWindow = MainWindow()
+    mainWindow.show()
     sys.exit(app.exec_())
