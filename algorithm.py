@@ -20,33 +20,31 @@ def imprimir_mezcla(mezcla, nombre, requisitos):
     resistencia_corrosion_total = np.sum(mezcla * df_materiales['Resistencia a la Corrosión (%)'])
     peso_total = np.sum(mezcla * df_materiales['Peso (kg/m³)'])
 
-    # Comprobar si cumple con los requisitos
-    if (resistencia_total >= requisitos['resistencia_minima'] and
-        durabilidad_total >= requisitos['durabilidad_deseada'] and
-        resistencia_corrosion_total >= requisitos['resistencia_corrosion_minima'] and
-        peso_total <= requisitos['peso_maximo']):
-        color = 'green'
-    else:
-        color = 'red'
+    cumple_resistencia = resistencia_total >= requisitos['resistencia_minima']
+    cumple_durabilidad = durabilidad_total >= requisitos['durabilidad_deseada']
+    cumple_corrosion = resistencia_corrosion_total >= requisitos['resistencia_corrosion_minima']
+    cumple_peso = peso_total <= requisitos['peso_maximo']
+
+    color = 'green' if cumple_resistencia and cumple_durabilidad and cumple_corrosion and cumple_peso else 'red'
 
     output = f"<span style='color:{color};'>{nombre}:</span><br>"
     for material, porcentaje in zip(materiales_utilizados['Material'], porcentajes):
         output += f"{material}: {porcentaje:.2f}%<br>"
     output += "<br>Propiedades de la mezcla:<br>"
-    output += f"<span style='color:{color};'>Resistencia total: {resistencia_total:.2f} MPa</span><br>"
-    output += f"<span style='color:{color};'>Durabilidad total: {durabilidad_total:.2f} años</span><br>"
-    output += f"<span style='color:{color};'>Costo total: {costo_total:.2f} USD/kg</span><br>"
-    output += f"<span style='color:{color};'>Resistencia a la corrosión total: {resistencia_corrosion_total:.2f} %</span><br>"
-    output += f"<span style='color:{color};'>Peso total: {peso_total:.2f} kg/m³</span><br>"
+    output += f"Resistencia total: {resistencia_total:.2f} MPa<br>"
+    output += f"Durabilidad total: {durabilidad_total:.2f} años<br>"
+    output += f"Costo total: {costo_total:.2f} USD/kg<br>"
+    output += f"Resistencia a la corrosión total: {resistencia_corrosion_total:.2f} %<br>"
+    output += f"Peso total: {peso_total:.2f} kg/m³<br>"
     
     return output
 
 def generar_solucion(requisitos):
-    # Seleccionar materiales que tienen una resistencia, durabilidad y resistencia a la corrosión superior a un porcentaje de los requisitos
+    # Seleccionar materiales con propiedades cercanas a los requisitos
     materiales_validos = df_materiales[
-        (df_materiales['Resistencia (MPa)'] >= requisitos['resistencia_minima'] * 0.75) &
-        (df_materiales['Durabilidad (años)'] >= requisitos['durabilidad_deseada'] * 0.75) &
-        (df_materiales['Resistencia a la Corrosión (%)'] >= requisitos['resistencia_corrosion_minima'] * 0.75)
+        (df_materiales['Resistencia (MPa)'] >= requisitos['resistencia_minima'] * 0.50) &
+        (df_materiales['Durabilidad (años)'] >= requisitos['durabilidad_deseada'] * 0.50) &
+        (df_materiales['Resistencia a la Corrosión (%)'] >= requisitos['resistencia_corrosion_minima'] * 0.50)
     ]
 
     if len(materiales_validos) == 0:
@@ -62,7 +60,6 @@ def generar_solucion(requisitos):
     num_materiales = np.random.randint(3, min(8, len(materiales_validos)))
     soluciones = []
 
-    # Generar varias soluciones iniciales diversificadas
     for _ in range(10):  # Generar 10 soluciones diversificadas
         indices = np.random.choice(len(materiales_validos), num_materiales, replace=False)
         proporciones = np.random.rand(num_materiales)
@@ -70,7 +67,7 @@ def generar_solucion(requisitos):
         solucion[materiales_validos.index[indices]] = proporciones / np.sum(proporciones)  # Normalizar
         soluciones.append(solucion)
 
-    # Seleccionar la mejor solución inicial basada en una heurística simple (por ejemplo, la que tenga mejor resistencia)
+    # Seleccionar la mejor solución inicial basada en una heurística simple
     mejor_solucion = max(soluciones, key=lambda sol: np.sum(sol * df_materiales['Resistencia (MPa)']))
 
     return mejor_solucion
@@ -85,22 +82,24 @@ def evaluar_solucion(solucion, requisitos):
     
     penalizacion = 0
     if resistencia < requisitos['resistencia_minima']:
-        penalizacion += (requisitos['resistencia_minima'] - resistencia) * 100
+        penalizacion += (requisitos['resistencia_minima'] - resistencia) ** 2
     if durabilidad < requisitos['durabilidad_deseada']:
-        penalizacion += (requisitos['durabilidad_deseada'] - durabilidad) * 100
+        penalizacion += (requisitos['durabilidad_deseada'] - durabilidad) ** 2
     if resistencia_corrosion < requisitos['resistencia_corrosion_minima']:
-        penalizacion += (requisitos['resistencia_corrosion_minima'] - resistencia_corrosion) * 100
+        penalizacion += (requisitos['resistencia_corrosion_minima'] - resistencia_corrosion) ** 2
     if peso > requisitos['peso_maximo']:
-        penalizacion += (peso - requisitos['peso_maximo']) * 100  # Penaliza el exceso de peso
+        penalizacion += (peso - requisitos['peso_maximo']) ** 2
 
-    score = resistencia + durabilidad + resistencia_corrosion - penalizacion - costo - peso
+    score = resistencia + durabilidad + resistencia_corrosion - penalizacion - (costo * 10) - (peso * 5)  # Ajustar coeficientes según necesidad
     return score, resistencia, durabilidad, costo, resistencia_corrosion, peso
 
 
 # Función de selección
 def seleccion(poblacion, puntuaciones):
-    indices = np.argsort(puntuaciones)[-2:]  # Seleccionar los dos mejores
-    return poblacion[indices[0]], poblacion[indices[1]]
+    # Implementar un método de selección más diverso
+    prob_seleccion = puntuaciones / np.sum(puntuaciones)
+    indices_seleccionados = np.random.choice(len(poblacion), 2, replace=False, p=prob_seleccion)
+    return poblacion[indices_seleccionados[0]], poblacion[indices_seleccionados[1]]
 
 # Función de cruce
 def cruce(parent1, parent2):
@@ -151,6 +150,10 @@ def algoritmo_genetico(num_generaciones, tamano_inicial_poblacion, requisitos, n
                 hijo1, hijo2 = cruce(parent1, parent2)
                 nueva_poblacion.extend([mutacion(hijo1, tasa_mutacion_individual, tasa_mutacion_gen), mutacion(hijo2, tasa_mutacion_individual, tasa_mutacion_gen)])
             
+            # Elitismo: Añadir la mejor solución de la generación anterior
+            mejor_actual = max(poblaciones[i], key=lambda sol: evaluar_solucion(sol, requisitos)[0])
+            nueva_poblacion.append(mejor_actual)
+
             poblaciones[i] = nueva_poblacion
             poblaciones[i] = poda_poblacion(poblaciones[i], puntuaciones, nuevo_tamano)
 
