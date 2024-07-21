@@ -93,11 +93,12 @@ def evaluar_solucion(solucion, requisitos):
     score = resistencia + durabilidad + resistencia_corrosion - penalizacion - (costo * 10) - (peso * 5)  # Ajustar coeficientes según necesidad
     return score, resistencia, durabilidad, costo, resistencia_corrosion, peso
 
-
 # Función de selección
 def seleccion(poblacion, puntuaciones):
     # Implementar un método de selección más diverso
     prob_seleccion = puntuaciones / np.sum(puntuaciones)
+    if len(poblacion) < 2:
+        return poblacion[0], poblacion[0]
     indices_seleccionados = np.random.choice(len(poblacion), 2, replace=False, p=prob_seleccion)
     return poblacion[indices_seleccionados[0]], poblacion[indices_seleccionados[1]]
 
@@ -156,6 +157,12 @@ def algoritmo_genetico(num_generaciones, tamano_inicial_poblacion, requisitos, n
 
             poblaciones[i] = nueva_poblacion
             poblaciones[i] = poda_poblacion(poblaciones[i], puntuaciones, nuevo_tamano)
+
+            # Filtrar mezclas con entre 3 y 7 materiales
+            poblaciones[i] = [sol for sol in poblaciones[i] if 3 <= np.sum(sol > 0) <= 7]
+
+            if len(poblaciones[i]) == 0:  # Si no quedan mezclas válidas, generar una nueva solución
+                poblaciones[i] = [generar_solucion(requisitos)]
 
             # Calcular promedios
             resistencia_promedio = np.mean([evaluar_solucion(sol, requisitos)[1] for sol in poblaciones[i]])
@@ -243,7 +250,7 @@ class MainWindow(QWidget):
         self.label_mutacion_gen = QLabel('Tasa de mutación por gen:')
         self.input_mutacion_gen = QLineEdit()
         self.input_mutacion_gen.setPlaceholderText('Tasa de mutación por gen')
-        layout.addWidget(self.label_mutacion_gen)
+        layout.addWidget(self.input_mutacion_gen)
         layout.addWidget(self.input_mutacion_gen)
 
         self.label_resistencia = QLabel('Resistencia mínima:')
@@ -265,7 +272,6 @@ class MainWindow(QWidget):
         self.label_peso = QLabel('Peso máximo:')
         self.input_peso = QLineEdit()
         self.input_peso.setPlaceholderText('Peso máximo')
-        layout.addWidget(self.label_peso)
         layout.addWidget(self.input_peso)
 
         self.button_iniciar = QPushButton('Iniciar Algoritmo Genético')
