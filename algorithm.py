@@ -8,17 +8,17 @@ import matplotlib.pyplot as plt
 df_materiales = pd.read_csv('materiales.csv')
 
 # Función para imprimir las propiedades de una mezcla en la interfaz
-def imprimir_mezcla(mezcla, nombre, requisitos):
+def imprimir_mezcla(mezcla, nombre, requisitos, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion, historia_pesos):
     if mezcla is None:
         return f"<span style='color:red;'>{nombre} no cumple con los requisitos solicitados.</span>"
 
     materiales_utilizados = df_materiales.loc[mezcla > 0]
-    porcentajes = mezcla[mezcla > 0] * 100  # Convertir a porcentajes
-    resistencia_total = np.sum(mezcla * df_materiales['Resistencia (MPa)'])
-    durabilidad_total = np.sum(mezcla * df_materiales['Durabilidad (años)'])
-    costo_total = np.sum(mezcla * df_materiales['Costo (USD/kg)'])
-    resistencia_corrosion_total = np.sum(mezcla * df_materiales['Resistencia a la Corrosión (%)'])
-    peso_total = np.sum(mezcla * df_materiales['Peso (kg/m³)'])
+    porcentajes = mezcla[mezcla > 0] * 100
+    resistencia_total = historia_resistencias[-1]
+    durabilidad_total = historia_durabilidades[-1]
+    costo_total = historia_costos[-1]
+    resistencia_corrosion_total = historia_resistencias_corrosion[-1]
+    peso_total = historia_pesos[-1]
 
     cumple_resistencia = resistencia_total >= requisitos['resistencia_minima']
     cumple_durabilidad = durabilidad_total >= requisitos['durabilidad_deseada']
@@ -39,8 +39,8 @@ def imprimir_mezcla(mezcla, nombre, requisitos):
     
     return output
 
+# Función para generar una solución basada en requisitos
 def generar_solucion(requisitos):
-    # Seleccionar materiales con propiedades cercanas a los requisitos
     materiales_validos = df_materiales[
         (df_materiales['Resistencia (MPa)'] >= requisitos['resistencia_minima'] * 0.50) &
         (df_materiales['Durabilidad (años)'] >= requisitos['durabilidad_deseada'] * 0.50) &
@@ -48,28 +48,24 @@ def generar_solucion(requisitos):
     ]
 
     if len(materiales_validos) == 0:
-        # Si no hay materiales válidos, genera una solución completamente aleatoria
         num_materiales = np.random.randint(3, 8)
         indices = np.random.choice(len(df_materiales), num_materiales, replace=False)
         proporciones = np.random.rand(num_materiales)
         solucion = np.zeros(len(df_materiales))
-        solucion[indices] = proporciones / np.sum(proporciones)  # Normalizar
+        solucion[indices] = proporciones / np.sum(proporciones)
         return solucion
 
-    # Si hay materiales válidos, generar soluciones iniciales de manera diversificada
     num_materiales = np.random.randint(3, min(8, len(materiales_validos)))
     soluciones = []
 
-    for _ in range(10):  # Generar 10 soluciones diversificadas
+    for _ in range(10):
         indices = np.random.choice(len(materiales_validos), num_materiales, replace=False)
         proporciones = np.random.rand(num_materiales)
         solucion = np.zeros(len(df_materiales))
-        solucion[materiales_validos.index[indices]] = proporciones / np.sum(proporciones)  # Normalizar
+        solucion[materiales_validos.index[indices]] = proporciones / np.sum(proporciones)
         soluciones.append(solucion)
 
-    # Seleccionar la mejor solución inicial basada en una heurística simple
     mejor_solucion = max(soluciones, key=lambda sol: np.sum(sol * df_materiales['Resistencia (MPa)']))
-
     return mejor_solucion
 
 # Función para evaluar una solución
@@ -79,7 +75,7 @@ def evaluar_solucion(solucion, requisitos):
     costo = np.sum(solucion * df_materiales['Costo (USD/kg)'])
     resistencia_corrosion = np.sum(solucion * df_materiales['Resistencia a la Corrosión (%)'])
     peso = np.sum(solucion * df_materiales['Peso (kg/m³)'])
-    
+
     penalizacion = 0
     if resistencia < requisitos['resistencia_minima']:
         penalizacion += (requisitos['resistencia_minima'] - resistencia) ** 2
@@ -90,12 +86,11 @@ def evaluar_solucion(solucion, requisitos):
     if peso > requisitos['peso_maximo']:
         penalizacion += (peso - requisitos['peso_maximo']) ** 2
 
-    score = resistencia + durabilidad + resistencia_corrosion - penalizacion - (costo * 10) - (peso * 5)  # Ajustar coeficientes según necesidad
+    score = resistencia + durabilidad + resistencia_corrosion - penalizacion - (costo * 10) - (peso * 5)
     return score, resistencia, durabilidad, costo, resistencia_corrosion, peso
 
 # Función de selección
 def seleccion(poblacion, puntuaciones):
-    # Implementar un método de selección más diverso
     prob_seleccion = puntuaciones / np.sum(puntuaciones)
     if len(poblacion) < 2:
         return poblacion[0], poblacion[0]
@@ -121,7 +116,7 @@ def mutacion(solucion, tasa_mutacion_individual, tasa_mutacion_gen):
 
 # Función para podar la población a un tamaño específico
 def poda_poblacion(poblacion, puntuaciones, nuevo_tamano):
-    nuevo_tamano = min(nuevo_tamano, len(poblacion))  # Asegúrate de no exceder el tamaño de la población
+    nuevo_tamano = min(nuevo_tamano, len(poblacion))
     indices_mejores = np.argsort(puntuaciones)[-nuevo_tamano:]
     return [poblacion[i] for i in indices_mejores if i < len(poblacion)]
 
@@ -206,7 +201,10 @@ def algoritmo_genetico(num_generaciones, tamano_inicial_poblacion, requisitos, n
             print(f"Generación {generacion+1}, Mezcla {i+1}: Resistencia {resistencia_promedio}, Durabilidad {durabilidad_promedio}, Costo {costo_promedio}, Corrosión {resistencia_corrosion_promedio}, Peso {peso_promedio}")
 
     # Guardar los valores de las mejores mezclas para graficar correctamente
-    mejores_mezclas_historia = [mejores_mezclas_por_generacion, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion, historia_pesos]
+    for i in range(3):  # Para cada una de las tres poblaciones
+        mejores_mezclas[i] = poblaciones[i][-1]  # Tomar la última mezcla de la última generación
+
+    mejores_mezclas_historia = [mejores_mezclas, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion, historia_pesos]
     return mejores_mezclas_historia
 
 # Clase de la interfaz gráfica
@@ -250,7 +248,7 @@ class MainWindow(QWidget):
         self.label_mutacion_gen = QLabel('Tasa de mutación por gen:')
         self.input_mutacion_gen = QLineEdit()
         self.input_mutacion_gen.setPlaceholderText('Tasa de mutación por gen')
-        layout.addWidget(self.input_mutacion_gen)
+        layout.addWidget(self.label_mutacion_gen)
         layout.addWidget(self.input_mutacion_gen)
 
         self.label_resistencia = QLabel('Resistencia mínima:')
@@ -262,16 +260,19 @@ class MainWindow(QWidget):
         self.label_durabilidad = QLabel('Durabilidad deseada:')
         self.input_durabilidad = QLineEdit()
         self.input_durabilidad.setPlaceholderText('Durabilidad deseada')
+        layout.addWidget(self.label_durabilidad)
         layout.addWidget(self.input_durabilidad)
 
         self.label_resistencia_corrosion = QLabel('Resistencia a la corrosión mínima:')
         self.input_resistencia_corrosion = QLineEdit()
         self.input_resistencia_corrosion.setPlaceholderText('Resistencia a la corrosión mínima')
+        layout.addWidget(self.label_resistencia_corrosion)
         layout.addWidget(self.input_resistencia_corrosion)
 
         self.label_peso = QLabel('Peso máximo:')
         self.input_peso = QLineEdit()
         self.input_peso.setPlaceholderText('Peso máximo')
+        layout.addWidget(self.label_peso)
         layout.addWidget(self.input_peso)
 
         self.button_iniciar = QPushButton('Iniciar Algoritmo Genético')
@@ -285,15 +286,19 @@ class MainWindow(QWidget):
         self.setLayout(layout)
 
     def run_algorithm(self):
-        tamano_inicial_poblacion = int(self.input_inicial.text())
-        nuevo_tamano = int(self.input_nuevo_tamano.text())
-        num_generaciones = int(self.input_generaciones.text())
-        tasa_mutacion_individual = float(self.input_mutacion_individual.text())
-        tasa_mutacion_gen = float(self.input_mutacion_gen.text())
-        resistencia_minima = float(self.input_resistencia.text())
-        durabilidad_deseada = float(self.input_durabilidad.text())
-        resistencia_corrosion_minima = float(self.input_resistencia_corrosion.text())
-        peso_maximo = float(self.input_peso.text())
+        try:
+            tamano_inicial_poblacion = int(self.input_inicial.text())
+            nuevo_tamano = int(self.input_nuevo_tamano.text())
+            num_generaciones = int(self.input_generaciones.text())
+            tasa_mutacion_individual = float(self.input_mutacion_individual.text())
+            tasa_mutacion_gen = float(self.input_mutacion_gen.text())
+            resistencia_minima = float(self.input_resistencia.text())
+            durabilidad_deseada = float(self.input_durabilidad.text())
+            resistencia_corrosion_minima = float(self.input_resistencia_corrosion.text())
+            peso_maximo = float(self.input_peso.text())
+        except ValueError:
+            self.output_console.setText("Por favor, asegúrate de que todos los campos están llenos y contienen valores numéricos válidos.")
+            return  # Termina la ejecución si hay un error
 
         requisitos = {
             'resistencia_minima': resistencia_minima,
@@ -306,14 +311,22 @@ class MainWindow(QWidget):
             num_generaciones, tamano_inicial_poblacion, requisitos, nuevo_tamano, tasa_mutacion_individual, tasa_mutacion_gen
         )
 
-        mejores_mezclas_por_generacion, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion, historia_pesos = mejores_mezclas_historia
+        mejores_mezclas, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion, historia_pesos = mejores_mezclas_historia
 
-        # Tomar las mejores mezclas de la última generación
-        mejores_mezclas_final = [mezclas[-1] for mezclas in mejores_mezclas_por_generacion]
+        # Tomar las mejores mezclas de la última generación y sus propiedades
+        mejor_mezcla_1 = mejores_mezclas[0]
+        mejor_mezcla_2 = mejores_mezclas[1]
+        mejor_mezcla_3 = mejores_mezclas[2]
 
-        output1 = imprimir_mezcla(mejores_mezclas_final[0], 'Mejor mezcla 1', requisitos)
-        output2 = imprimir_mezcla(mejores_mezclas_final[1], 'Mejor mezcla 2', requisitos)
-        output3 = imprimir_mezcla(mejores_mezclas_final[2], 'Mejor mezcla 3', requisitos)
+        # Imprimir en consola las propiedades de la mejor mezcla de la última generación
+        print(f"Generación {num_generaciones}, Mezcla 1: Resistencia {historia_resistencias[0][-1]}, Durabilidad {historia_durabilidades[0][-1]}, Costo {historia_costos[0][-1]}, Corrosión {historia_resistencias_corrosion[0][-1]}, Peso {historia_pesos[0][-1]}")
+        print(f"Generación {num_generaciones}, Mezcla 2: Resistencia {historia_resistencias[1][-1]}, Durabilidad {historia_durabilidades[1][-1]}, Costo {historia_costos[1][-1]}, Corrosión {historia_resistencias_corrosion[1][-1]}, Peso {historia_pesos[1][-1]}")
+        print(f"Generación {num_generaciones}, Mezcla 3: Resistencia {historia_resistencias[2][-1]}, Durabilidad {historia_durabilidades[2][-1]}, Costo {historia_costos[2][-1]}, Corrosión {historia_resistencias_corrosion[2][-1]}, Peso {historia_pesos[2][-1]}")
+
+        # Mostrar en la GUI las mejores mezclas de la última generación
+        output1 = imprimir_mezcla(mejor_mezcla_1, 'Mejor mezcla 1', requisitos, historia_resistencias[0], historia_durabilidades[0], historia_costos[0], historia_resistencias_corrosion[0], historia_pesos[0])
+        output2 = imprimir_mezcla(mejor_mezcla_2, 'Mejor mezcla 2', requisitos, historia_resistencias[1], historia_durabilidades[1], historia_costos[1], historia_resistencias_corrosion[1], historia_pesos[1])
+        output3 = imprimir_mezcla(mejor_mezcla_3, 'Mejor mezcla 3', requisitos, historia_resistencias[2], historia_durabilidades[2], historia_costos[2], historia_resistencias_corrosion[2], historia_pesos[2])
 
         self.output_console.clear()
         self.output_console.append(output1)
