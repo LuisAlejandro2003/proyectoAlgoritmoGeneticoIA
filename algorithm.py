@@ -7,13 +7,7 @@ import matplotlib.pyplot as plt
 # Cargar el dataset
 df_materiales = pd.read_csv('materiales.csv')
 
-# Estándares de la industria
-ESTANDARES = {
-    'resistencia_minima': 30,  # en MPa
-    'durabilidad_deseada': 50,  # en años
-    'resistencia_corrosion_minima': 80,  # en porcentaje
-    'peso_maximo': 2500  # en kg/m³
-}
+
 
 # Función para imprimir las propiedades de una mezcla en la interfaz
 def imprimir_mezcla(mezcla, nombre, requisitos, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion, historia_pesos):
@@ -141,8 +135,6 @@ def algoritmo_genetico(num_generaciones, tamano_inicial_poblacion, requisitos, n
     historia_resistencias_corrosion = [[], [], []]
     historia_pesos = [[], [], []]
 
-    historia_fitness = []
-
     # Guardar las mejores mezclas en cada generación
     mejores_mezclas_por_generacion = [[], [], []]
 
@@ -215,20 +207,11 @@ def algoritmo_genetico(num_generaciones, tamano_inicial_poblacion, requisitos, n
 
             print(f"Generación {generacion+1}, Mezcla {i+1}: Resistencia {resistencia_promedio}, Durabilidad {durabilidad_promedio}, Costo {costo_promedio}, Corrosión {resistencia_corrosion_promedio}, Peso {peso_promedio}")
 
-        # Registrar la evolución del fitness
-        mejor_fitness = max(fitness_generacion)
-        mejor_fitness_historico = max(mejor_fitness_historico, mejor_fitness)
-        historia_fitness.append({
-            'mejor': mejor_fitness_historico,
-            'promedio': np.mean(fitness_generacion),
-            'peor': min(fitness_generacion)
-        })
-
     # Guardar los valores de las mejores mezclas para graficar correctamente
     for i in range(3):  # Para cada una de las tres poblaciones
         mejores_mezclas[i] = poblaciones[i][-1]  # Tomar la última mezcla de la última generación
 
-    mejores_mezclas_historia = [mejores_mezclas, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion, historia_pesos, historia_fitness]
+    mejores_mezclas_historia = [mejores_mezclas, historia_resistencias, historia_durabilidades, historia_costos, historia_resistencias_corrosion, historia_pesos]
     return mejores_mezclas_historia
 
 # Clase de la interfaz gráfica
@@ -260,11 +243,11 @@ class MainWindow(QWidget):
 
         self.label_mutacion_individual = QLabel('Tasa de mutación individual:')
         self.input_mutacion_individual = QLineEdit()
-        self.input_mutacion_individual.setPlaceholderText('Ej: 0.01')
+        self.input_mutacion_individual.setPlaceholderText('Ej: 0.8')
 
         self.label_mutacion_gen = QLabel('Tasa de mutación por gen:')
         self.input_mutacion_gen = QLineEdit()
-        self.input_mutacion_gen.setPlaceholderText('Ej: 0.05')
+        self.input_mutacion_gen.setPlaceholderText('Ej: 0.5')
 
         self.label_resistencia = QLabel('Resistencia mínima:')
         self.input_resistencia = QLineEdit()
@@ -306,10 +289,10 @@ class MainWindow(QWidget):
 
         self.label_estandares = QLabel('Estándares de la industria:')
         self.label_estandares_valores = QLabel(
-            f"Resistencia mínima: {ESTANDARES['resistencia_minima']} MPa\n"
-            f"Durabilidad deseada: {ESTANDARES['durabilidad_deseada']} años\n"
-            f"Resistencia a la corrosión mínima: {ESTANDARES['resistencia_corrosion_minima']} %\n"
-            f"Peso máximo: {ESTANDARES['peso_maximo']} kg/m³"
+            f"Resistencia mínima 40 MPa\n"
+            f"Durabilidad estandar de 45 a 150 años\n"
+            f"Resistencia a la corrosión estandar 45-90 %\n"
+            f"Peso máximo: 7500 kg/m³"
         )
         layout.addWidget(self.label_estandares)
         layout.addWidget(self.label_estandares_valores)
@@ -325,29 +308,25 @@ class MainWindow(QWidget):
         self.group_graficas = QGroupBox("Gráficas de Propiedades")
         graficas_layout = QGridLayout()
 
-        self.button_fitness = QPushButton('Mostrar Gráfica de Fitness')
-        self.button_fitness.clicked.connect(self.plot_fitness)
-        graficas_layout.addWidget(self.button_fitness, 0, 0)
-
         self.button_resistencia = QPushButton('Mostrar Gráfica de Resistencia')
         self.button_resistencia.clicked.connect(self.plot_resistencia)
-        graficas_layout.addWidget(self.button_resistencia, 0, 1)
+        graficas_layout.addWidget(self.button_resistencia, 0, 0)
 
         self.button_durabilidad = QPushButton('Mostrar Gráfica de Durabilidad')
         self.button_durabilidad.clicked.connect(self.plot_durabilidad)
-        graficas_layout.addWidget(self.button_durabilidad, 1, 0)
+        graficas_layout.addWidget(self.button_durabilidad, 0, 1)
 
         self.button_costo = QPushButton('Mostrar Gráfica de Costo')
         self.button_costo.clicked.connect(self.plot_costo)
-        graficas_layout.addWidget(self.button_costo, 1, 1)
+        graficas_layout.addWidget(self.button_costo, 1, 0)
 
         self.button_resistencia_corrosion = QPushButton('Mostrar Gráfica de Resistencia a la Corrosión')
         self.button_resistencia_corrosion.clicked.connect(self.plot_resistencia_corrosion)
-        graficas_layout.addWidget(self.button_resistencia_corrosion, 2, 0)
+        graficas_layout.addWidget(self.button_resistencia_corrosion, 1, 1)
 
         self.button_peso = QPushButton('Mostrar Gráfica de Peso')
         self.button_peso.clicked.connect(self.plot_peso)
-        graficas_layout.addWidget(self.button_peso, 2, 1)
+        graficas_layout.addWidget(self.button_peso, 2, 0)
 
         self.group_graficas.setLayout(graficas_layout)
         layout.addWidget(self.group_graficas)
@@ -391,7 +370,7 @@ class MainWindow(QWidget):
             num_generaciones, tamano_inicial_poblacion, requisitos, nuevo_tamano, tasa_mutacion_individual, tasa_mutacion_gen
         )
 
-        mejores_mezclas, self.historia_resistencias, self.historia_durabilidades, self.historia_costos, self.historia_resistencias_corrosion, self.historia_pesos, self.historia_fitness = self.mejores_mezclas_historia
+        mejores_mezclas, self.historia_resistencias, self.historia_durabilidades, self.historia_costos, self.historia_resistencias_corrosion, self.historia_pesos = self.mejores_mezclas_historia
 
         # Tomar las mejores mezclas de la última generación y sus propiedades
         mejor_mezcla_1 = mejores_mezclas[0]
@@ -412,25 +391,6 @@ class MainWindow(QWidget):
         self.output_console.append(output1)
         self.output_console.append(output2)
         self.output_console.append(output3)
-
-    def plot_fitness(self):
-        generaciones = np.arange(1, len(self.historia_fitness) + 1)
-        mejor_fitness = [f['mejor'] for f in self.historia_fitness]
-        promedio_fitness = [f['promedio'] for f in self.historia_fitness]
-        peor_fitness = [f['peor'] for f in self.historia_fitness]
-
-        plt.figure(figsize=(10, 6))
-        plt.plot(generaciones, mejor_fitness, label='Mejor Fitness', color='green')
-        plt.plot(generaciones, promedio_fitness, label='Promedio Fitness', color='blue')
-        plt.plot(generaciones, peor_fitness, label='Peor Fitness', color='red')
-
-        plt.xlabel('Generaciones')
-        plt.ylabel('Fitness')
-        plt.title('Evolución del Fitness a lo largo de las Generaciones')
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
 
     def plot_resistencia(self):
         generaciones = np.arange(1, len(self.historia_resistencias[0]) + 1)
